@@ -2,11 +2,10 @@ package com.proyecto.biblioteca.service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
-
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-
+import org.springframework.web.server.ResponseStatusException;
 import com.proyecto.biblioteca.dto.PrestamoDTO;
 import com.proyecto.biblioteca.dto.PrestamoInfoDTO;
 import com.proyecto.biblioteca.model.Libro;
@@ -15,6 +14,8 @@ import com.proyecto.biblioteca.model.Usuario;
 import com.proyecto.biblioteca.repository.ILibroRepository;
 import com.proyecto.biblioteca.repository.IPrestamoRepository;
 import com.proyecto.biblioteca.repository.IUsuarioRepository;
+
+import jakarta.transaction.Transactional;
 
 @Service
 public class PrestamoService implements IPrestamoService {
@@ -28,34 +29,45 @@ public class PrestamoService implements IPrestamoService {
 
     
 
-    //Creación de Prestamos
+    //Creación de prestamos
     @Override
+    @Transactional
     public void savePrestamos(PrestamoDTO prestDTO) {
-        // Traemos los datos de Prestamo
-        Prestamo Prestamo = new Prestamo();
-        Prestamo.setFechaInicio(prestDTO.getFechaInicio());    
-        Prestamo.setFechaEntrega(prestDTO.getFechaEntrega());    
 
-        // Traemos el objeto producto
-        List<Libro> libro = libRepo.findAllById(prestDTO.getLibrosId());
-        Prestamo.setListaLibros(libro);
+        // Trae el objeto usuario
+        Usuario usuario = usuaRepo.findById(prestDTO.getUsuarioId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No se encontró el usuario"));
 
-        // Traemos el objeto cliente
-        Usuario usua = usuaRepo.findById(prestDTO.getUsuarioId()).orElse(null);
-        Prestamo.setUnUsuario(usua);
+        // Trae los libros seleccionados
+        List<Libro> libros = libRepo.findAllById(prestDTO.getLibrosId());
 
-        // Guardar la busqueda
-        prestRepo.save(Prestamo);
-
-        //Modifica el valor true de la variable disponibilidad
-        for(Libro libroDispo : libro){
-            libroDispo.setDisponibilidad(false);
-            libRepo.save(libroDispo);
+        if (libros.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No se encontraron los libros seleccionados");
         }
+        // Verifica disponibilidad de todos los libros antes de crear el préstamo
+        for (Libro libro : libros) {
+            if (Boolean.FALSE.equals(libro.getDisponibilidad())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,"El libro con ID " + libro.getIdLibro() + " no está disponible actualmente");
+            }
+        }
+
+        // Crea el prestamo
+        Prestamo prestamo = new Prestamo();
+        prestamo.setFechaInicio(prestDTO.getFechaInicio());
+        prestamo.setFechaEntrega(prestDTO.getFechaEntrega());
+        prestamo.setListaLibros(libros);
+        prestamo.setUnUsuario(usuario);
+
+        // Guarda el prestamo
+        prestRepo.save(prestamo);
+        // Actualiza la disponibilidad de los libros a FALSE
+        for (Libro libro : libros) {
+            libro.setDisponibilidad(false);
+        }
+        libRepo.saveAll(libros);
     }
 
 
-    //Traer todas las Prestamos
+    //Traer todas las prestamos
     @Override
     public List<PrestamoInfoDTO> getPrestamos(){
 
@@ -69,7 +81,7 @@ public class PrestamoService implements IPrestamoService {
     } 
 
 
-    // Traer un solo Prestamo
+    // Traer un solo prestamo
     @Override
     public PrestamoInfoDTO findPrestamo(Long id) {
 
@@ -83,31 +95,32 @@ public class PrestamoService implements IPrestamoService {
     }
 
 
-    // Eliminación de una sola Prestamo
+    // Eliminación de una sola prestamo
     @Override
-    public boolean deletePrestamo(Long id) {
-        Optional<Prestamo> optionalPrestamo = prestRepo.findById(id);
-        // Confirmación si existe el Id
-        if (optionalPrestamo.isPresent()) {
-            Prestamo prestamo = optionalPrestamo.get();
-            // Trae los libros asociados al préstamo
-            List<Libro> librosAsociados = prestamo.getListaLibros();
-            // Marcar los libros como disponibles nuevamente
-            for (Libro libro : librosAsociados) {
-                libro.setDisponibilidad(true);
-            }
-            // Guarda todos los libros actualizados
-            libRepo.saveAll(librosAsociados);
-            // Elimina el préstamo
-            prestRepo.delete(prestamo);
-            return true;
-        } 
-        else {
-            return false;
-        }
+    @Transactional
+    public void deletePrestamo(Long id) {
+    // Busca el prestamo por su ID
+    Prestamo prestamo = prestRepo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No se encontró el préstamo con ID " + id));
+
+    // Trae los libros asociados al préstamo
+    List<Libro> librosAsociados = prestamo.getListaLibros();
+
+    // Marca los libros como disponibles nuevamente
+    for (Libro libro : librosAsociados) {
+        libro.setDisponibilidad(true);
+        // Desvincula el prestamo del libro para permitir eliminar
+        libro.setUnPrestamo(null);
     }
 
-    // Edición de una sola Prestamo
+    // Guarda los libros actualizados
+    libRepo.saveAll(librosAsociados);
+
+    // Elimina el prestamo
+    prestRepo.delete(prestamo);
+    }
+
+
+    // Edición de una sola prestamo
     @Override
     public PrestamoInfoDTO editPrestamo(Long id, PrestamoInfoDTO prestInfoDTO) {
         //Trae el objeto de la Prestamo por Id 
@@ -116,9 +129,14 @@ public class PrestamoService implements IPrestamoService {
         if(prest == null){
             return null;
         }
-        // Editar atributos de Prestamo
+        // Editar atributos de prestamo
+        // Confirma que el titulo no esté vacio y permite editar los dos atributos o uno de los dos sin retorno null
+        if(prestInfoDTO.getFechaInicio() != null){
         prest.setFechaInicio(prestInfoDTO.getFechaInicio());
+        }
+        if(prestInfoDTO.getFechaEntrega() != null ){
         prest.setFechaEntrega(prestInfoDTO.getFechaEntrega());
+        }
         // Guarda el nuevo valor 
         Prestamo PrestamoActualizada = prestRepo.save(prest);   
         //Convierte a DTO el resultado

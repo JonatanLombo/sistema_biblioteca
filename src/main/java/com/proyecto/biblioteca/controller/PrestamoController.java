@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.proyecto.biblioteca.dto.PrestamoDTO;
 import com.proyecto.biblioteca.dto.PrestamoInfoDTO;
@@ -27,9 +28,13 @@ public class PrestamoController {
     public ResponseEntity<?> savePrestamo(@RequestBody PrestamoDTO prestDTO){
         try {
             prestServ.savePrestamos(prestDTO);
-            return ResponseEntity.status(HttpStatus.CREATED).body("Prestamo exitoso");
+            return ResponseEntity.status(HttpStatus.CREATED).body("Préstamo creado con exito");
+        } catch (ResponseStatusException e) {
+            // Captura los errores personalizados del servicio
+            return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error al crear el prestamo" + e.getMessage());
+            // Captura cualquier otro error no previsto
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Ocurrió un error al registrar el préstamo");
         }
     }
 
@@ -63,19 +68,19 @@ public class PrestamoController {
     //Endpoint eliminación de prestamos
     @DeleteMapping("/prestamos/eliminar/{id}")
     public ResponseEntity<?> deletePrestamo(@PathVariable Long id){
-        boolean delete = prestServ.deletePrestamo(id);
-
-        if(delete){
-            return ResponseEntity.ok("Prestamo eliminada exitosamente");
-        }
-        else{
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("No se encontró el prestamo con Id "+id);
+        try {
+            prestServ.deletePrestamo(id);
+        return ResponseEntity.ok("Préstamo eliminado exitosamente");
+        } catch (ResponseStatusException e) {
+            return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Ocurrió un error al eliminar el préstamo");
         }
     }
 
 
     //Endpoint modificación de Prestamo
-    @PutMapping("/Prestamos/editar/{id}")
+    @PutMapping("/prestamos/editar/{id}")
     public ResponseEntity<?> editPrestamo(@PathVariable Long id, @RequestBody PrestamoInfoDTO prestInfoDTO){ 
         
         PrestamoInfoDTO PrestamoActualizada = prestServ.editPrestamo(id, prestInfoDTO); 

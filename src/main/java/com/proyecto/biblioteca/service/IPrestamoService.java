@@ -17,7 +17,7 @@ public interface IPrestamoService {
 
 
     // Eliminar una solo Prestamo
-    public boolean deletePrestamo(Long id);
+    public void deletePrestamo(Long id);
 
     // Modificar Prestamo 
     public PrestamoInfoDTO editPrestamo(Long id, PrestamoInfoDTO PrestInfoDTO);
