@@ -71,9 +71,9 @@ El proyecto está dividido en capas que facilitan la mantenibilidad y escalabili
 Archivo `application.properties`:
 
 ```properties
-spring.datasource.url=jdbc:mysql://localhost:3306/biblioteca?useSSL=false&serverTimezone=UTC
-spring.datasource.username=root
-spring.datasource.password=
+spring.datasource.url=jdbc:mysql://localhost:3306/nombre_bd?useSSL=false&serverTimezone=UTC
+spring.datasource.username=TU_USUARIO
+spring.datasource.password=TU_CONTRASEÑA
 spring.jpa.hibernate.ddl-auto=update
 spring.jpa.database-platform=org.hibernate.dialect.MySQL8Dialect
 server.port=8080
